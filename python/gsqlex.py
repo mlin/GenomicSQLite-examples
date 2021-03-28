@@ -30,7 +30,7 @@ def load(input_gff, output_db):
                 (chromosome, begin_pos, end_pos, line),
             )
             count += 1
-    print(f"Loaded {count} GFF lines")
+    print(f"Loaded {count} GFF records")
 
     # create Genomic Range Index (GRI) on the GFF records
     create_gri_sql = genomicsqlite.create_genomic_range_index_sql(

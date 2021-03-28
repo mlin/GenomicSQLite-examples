@@ -1,1 +1,6 @@
 exons.db
+GenomicSQLite-*.zip
+genomicsqlite.h
+libgenomicsqlite.*
+c/LICENSE
+gsqlex
