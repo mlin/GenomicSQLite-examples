@@ -27,7 +27,7 @@ def load(input_gff, output_db):
             end_pos = int(fields[2])
             dbconn.execute(
                 "INSERT INTO gff(chromosome,begin_pos,end_pos,line) VALUES(?,?,?,?)",
-                (chromosome, begin_pos, end_pos, line),
+                (chromosome, begin_pos, end_pos, "\t".join(fields[3:])),
             )
             count += 1
     print(f"Loaded {count} GFF records")
@@ -48,7 +48,7 @@ def query(db, range_txt):
 
     # query the genomic range using in-SQL helper functions for GRI and parsing the range string
     cursor = dbconn.execute(
-        """SELECT line FROM gff WHERE _rowid_ IN
+        """SELECT chromosome, begin_pos, end_pos, line FROM gff WHERE _rowid_ IN
                 genomic_range_rowids(
                     'gff',
                     parse_genomic_range_sequence(?1),
@@ -59,7 +59,7 @@ def query(db, range_txt):
 
     # print results
     for row in cursor:
-        print(row[0])
+        print("\t".join(str(elt) for elt in row))
 
 
 def main(argv):

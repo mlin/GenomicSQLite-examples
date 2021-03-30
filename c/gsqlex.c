@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Parse one GFF line and execute insert statement with it */
 int load_record(sqlite3_stmt *insert, char *line) {
     char *chromosome = strsep(&line, "\t");
     char *begin_pos = strsep(&line, "\t");
@@ -19,6 +20,8 @@ int load_record(sqlite3_stmt *insert, char *line) {
         return rc;
     }
     rc = sqlite3_bind_text(insert, 1, chromosome, -1, 0);
+    /* For expedience: using sqlite3_bind_text() with positions, relying on SQLite column affinity
+       to coerce them to integers */
     rc = rc != SQLITE_OK ? rc : sqlite3_bind_text(insert, 2, begin_pos, -1, 0);
     rc = rc != SQLITE_OK ? rc : sqlite3_bind_text(insert, 3, end_pos, -1, 0);
     rc = rc != SQLITE_OK ? rc : sqlite3_bind_text(insert, 4, line, -1, 0);
@@ -34,13 +37,16 @@ int load_record(sqlite3_stmt *insert, char *line) {
     return SQLITE_OK;
 }
 
+/* load subcommand */
 int load(const char *input_gff, const char *output_db) {
+    /* open GFF file */
     FILE *infile = fopen(input_gff, "r");
     if (!infile) {
         fprintf(stderr, "Unable to open %s\n", input_gff);
         return 1;
     }
 
+    /* create & initialize GenomicSQLite database */
     sqlite3 *dbconn;
     char *zErrMsg = 0;
     int rc =
@@ -52,7 +58,6 @@ int load(const char *input_gff, const char *output_db) {
         fclose(infile);
         return rc;
     }
-
     rc = sqlite3_exec(dbconn, "BEGIN", 0, 0, &zErrMsg);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Unable to BEGIN transaction: %s\n", zErrMsg ? zErrMsg : "");
@@ -79,6 +84,7 @@ int load(const char *input_gff, const char *output_db) {
         return rc;
     }
 
+    /* prepare GFF insert statement */
     sqlite3_stmt *insert = 0;
     rc = sqlite3_prepare_v2(dbconn,
                             "INSERT INTO gff(chromosome,begin_pos,end_pos,line) VALUES(?,?,?,?)",
@@ -90,6 +96,7 @@ int load(const char *input_gff, const char *output_db) {
         return rc;
     }
 
+    /* insert each GFF line */
     int count = 0;
     char *line = 0;
     size_t n = 0;
@@ -123,15 +130,18 @@ int load(const char *input_gff, const char *output_db) {
         return rc;
     }
 
+    /* create Genomic Range Index (GRI) */
     char *gri_sql = create_genomic_range_index_sql("gff", "chromosome", "begin_pos", "end_pos", -1);
     if (!gri_sql || *gri_sql == 0) {
-        /* see libgenomicsqlite.h for calling convention details*/
+        /* see genomicsqlite.h for calling convention details */
         fprintf(stderr, "Unable to create_genomic_range_index_sql: %s\n",
                 gri_sql ? gri_sql + 1 : "");
         sqlite3_close_v2(dbconn);
+        sqlite3_free(gri_sql);
         return SQLITE_ERROR;
     }
     rc = sqlite3_exec(dbconn, gri_sql, 0, 0, &zErrMsg);
+    sqlite3_free(gri_sql);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Unable to create GRI: %s\n", zErrMsg ? zErrMsg : "");
         sqlite3_free(zErrMsg);
@@ -139,6 +149,7 @@ int load(const char *input_gff, const char *output_db) {
         return rc;
     }
 
+    /* finish up */
     rc = sqlite3_exec(dbconn, "COMMIT", 0, 0, &zErrMsg);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Unable to COMMIT transaction: %s\n", zErrMsg ? zErrMsg : "");
@@ -155,7 +166,9 @@ int load(const char *input_gff, const char *output_db) {
     return rc;
 }
 
+/* query subcommand */
 int query(const char *dbfile, const char *range) {
+    /* open read-only database */
     sqlite3 *dbconn;
     char *zErrMsg = 0;
     int rc = genomicsqlite_open(dbfile, &dbconn, &zErrMsg, SQLITE_OPEN_READONLY, "{}");
@@ -165,6 +178,7 @@ int query(const char *dbfile, const char *range) {
         return rc;
     }
 
+    /* query the genomic range using in-SQL helper functions for GRI and text range parsing */
     sqlite3_stmt *query;
     rc = sqlite3_prepare_v2(dbconn,
                             "SELECT chromosome, begin_pos, end_pos, line FROM gff WHERE _rowid_ IN "
@@ -183,21 +197,21 @@ int query(const char *dbfile, const char *range) {
         return rc;
     }
     while ((rc = sqlite3_step(query)) == SQLITE_ROW) {
+        /* print each overlapping line */
         printf("%s\t%s\t%s\t%s\n", (const char *)sqlite3_column_text(query, 0),
                (const char *)sqlite3_column_text(query, 1),
                (const char *)sqlite3_column_text(query, 2),
                (const char *)sqlite3_column_text(query, 3));
     }
-    if (rc != SQLITE_DONE) {
-        fprintf(stderr, "Unable to query, code = %d\n", rc);
-        sqlite3_close_v2(dbconn);
-        return rc;
-    }
 
-    return sqlite3_close_v2(dbconn);
+    /* finish up */
+    rc = (rc == SQLITE_DONE) ? SQLITE_OK : fprintf(stderr, "Unable to query, code = %d\n", rc), rc;
+    sqlite3_close_v2(dbconn);
+    return rc;
 }
 
 int main(int argc, char **argv) {
+    /* important: global initialization of GenomicSQLite library */
     char *zErrMsg = 0;
     int rc = GENOMICSQLITE_C_INIT(&zErrMsg);
     if (rc != SQLITE_OK) {

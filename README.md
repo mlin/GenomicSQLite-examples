@@ -1,19 +1,24 @@
 # GenomicSQLite-examples
 
-This repo exhibits a simple example program using [Genomics Extension for SQLite](https://github.com/mlin/GenomicSQLite), implemented in several supported programming languages. It's a bare-minimum starting point for you to fork into your own program. See the [Programming Guide](https://mlin.github.io/GenomicSQLite) for full documentation.
+This repo exhibits a simple example program using [Genomics Extension for SQLite](https://github.com/mlin/GenomicSQLite), implemented in several supported programming languages. It's a minimal starting point to fork into your own program. See the [Programming Guide](https://mlin.github.io/GenomicSQLite) for full documentation.
 
-The program `gsqlex load exons.gff exons.db` imports a small [GFF file](https://en.wikipedia.org/wiki/General_feature_format) into a database, indexed by genomic range. Then, `gsqlex query exons.db chr17:43,104,800-43,105,000` prints the records overlapping the given genomic range.
+Each implementation provides two subcommands:
+
+1. `gsqlex load exons.gff exons.db` imports a small [GFF file](https://en.wikipedia.org/wiki/General_feature_format) into a new database, indexed by genomic range
+2. `gsqlex query exons.db chr17:43,104,800-43,105,000` prints the records overlapping the given genomic range
+
+General requirements: x86-64, Linux or macOS, installed development package for SQLite 3.31.0+.
 
 ### Python (3.6+)
 
 ```
-pip install genomicsqlite
+pip3 install genomicsqlite
 
 git clone https://github.com/mlin/GenomicSQLite-examples.git
 cd GenomicSQLite-examples/python
 
-python gsqlex.py load ../exons.gff exons.db
-python gsqlex.py query exons.db chr17:43,104,800-43,105,000
+python3 gsqlex.py load ../exons.gff exons.db
+python3 gsqlex.py query exons.db chr17:43,104,800-43,105,000
 ```
 
 ### C
